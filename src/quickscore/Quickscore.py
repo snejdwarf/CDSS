@@ -2,12 +2,11 @@
 # coding: utf-8
 
 
-
-#import matplotlib.pyplot as plt
 import numpy as np
 import random
 import time
 import sys
+from src import util
 import mpmath as mpm
 mpm.mp.dps = 40
 
@@ -30,31 +29,20 @@ def _powerset_tuple(s):
         for set in _powerset_tuple(s[1:]):
             yield (s[0],) + set
             yield set
-            
-def findingRelatedDis(arr,finding):
-    return np.argwhere(arr[finding,:]>0)
-
-def diseaseRelatedFindings(arr,disease):
-    return np.argwhere(arr[:,disease]>0)
-
-
-# In[94]:
-
-
-
-
-# In[95]:
-
 
 class QS:
+
+    def set_mpm_precision(self, precision):
+        mpm.mp.dps = precision
+
     def __init__(self,Q=None,PD=None, onlyupdatepd = False):
-        self.Q = Q
-        self.PD = PD
-        self.PD_org = np.array(PD)
-        if PD is not None:
-            self.inverse_PD = 1-PD
-        self.onlyUpdatePD = onlyupdatepd
-    
+
+            self.Q = Q
+            self.PD = PD
+            self.PD_org = np.array(PD)
+            self.inverse_PD = 1-PD if PD is not None else None
+            self.onlyUpdatePD = onlyupdatepd
+
     def convert_to_mpf(self):
         mpm_convert = np.vectorize(lambda x: mpm.mpf(x,))
         self.Q = mpm_convert(self.Q)
@@ -86,14 +74,14 @@ class QS:
             return 1-self.PD[i]
         
     def generateRandomTables(self,nd,nf):
-        self.PD = np.array([max(0,abs(random.gauss(1e-8,0.000005))) for i in range(nd)])
-        self.PD_org = np.array(self.PD)
-        self.inverse_PD = 1 - self.PD
+        self.PD = np.array([max(random.betavariate(2,20),1e-10) for i in range(nd)])
+        self.PD_org = self.PD
+        self.inverse_PD = 1-self.PD
         self.Q = np.array([[0 if random.random() > 0.1 else max(0,min(abs(random.gauss(0.03,0.6)),0.9)) for i in range(nd)] for i in range(nf)])
 
     def PNegativeFinding(self,negfinding):
         '''
-        Implements equation 5 from paper: The probability that a single finding will be absent
+        The probability that a single finding will be absent
         '''
         res = 1
         #For loop runs in the number of diseases
@@ -105,7 +93,7 @@ class QS:
 
     def PNegativeFindings(self,*findings):
         '''
-        Implements equation 6 from paper: The probability that multiple findings will be absent
+        The probability that multiple findings will be absent
         '''
         res = 1
         #Outer product
@@ -122,7 +110,7 @@ class QS:
 
     def PPositiveFindings(self,*findings):
         '''    
-        Implements equation 10 from paper: The probability that multiple findings will be present
+        The probability that multiple findings will be present
         '''
         findings = list(findings)
         res = 0
@@ -136,39 +124,10 @@ class QS:
                 out_prod = out_prod * ( inn_prod*self.PD[i]+(self.oneMinusPD(i)))
             res = res + sign*out_prod
         return res
-    
-    def PPositiveFindings_ver2(self,*findings):
-        '''    
-        Implements equation 10 from paper: The probability that multiple findings will be present - attempts to optimize reliability
-        '''
-        findings = list(findings)
-        res = 0
-        pos_bucket = 0
-        neg_bucket = 0
-        al_visisted = []
-        for F in _powerset(findings):
-            sign = (-1)**len(F)
-            out_prod = 0
-            for i in range(self.N_disease()):
-                inn_prod = 0
-                for f in F:
-                    inn_prod = inn_prod + np.log((1-self.Q[f,i]))
-                out_prod = out_prod + np.log(( np.exp(inn_prod)*self.PD[i]+(self.oneMinusPD(i))))
-                if np.exp(out_prod)<0 and F not in al_visisted:
-                    al_visisted.append(F)
-                    print(F)
-            if(sign==-1):
-                neg_bucket = neg_bucket + np.exp(out_prod)
-            elif(sign==1):
-                pos_bucket = pos_bucket + np.exp(out_prod)
-        print("pos: ", pos_bucket)
-        print("neg: ", neg_bucket)
-        print(pos_bucket>neg_bucket)
-        return pos_bucket - neg_bucket
-    
+
     def PFindings(self,present_findings, absent_findings, d_i = None):
         '''    
-        Implements equation 11 from paper: The probability that a mixture of findings will be present or absent.
+        The probability that a mixture of findings will be present or absent.
         
         If d_i is set the conditional probability of the findings given disease d_i will be returned
         '''
@@ -187,6 +146,65 @@ class QS:
                     out_prod = out_prod * ( inn_prod*self.PD[i]+(self.oneMinusPD(i)))
             res = res + sign*out_prod
         return res
+
+    def PFindings_v2(self, present_findings, absent_findings, d_i=None, showStatus = False):
+        '''
+        Implements equation 11 from paper: The probability that a mixture of findings will be present or absent.
+        Only iterates over relevant disease parents.
+        '''
+        res = 0
+        iteration = 0
+        for F in _powerset(present_findings):
+            sign = (-1) ** len(F)
+            out_prod = 1
+            for i in util.parentsOfFindings(self.Q,F+absent_findings):
+                inn_prod = 1
+                for f in F + absent_findings:
+                    inn_prod = inn_prod * (1 - self.Q[f, i])
+
+                if (i == d_i):
+                    out_prod = out_prod * inn_prod
+                else:
+                    out_prod = out_prod * (inn_prod * self.PD[i] + (self.oneMinusPD(i)))
+            res = res + sign * out_prod
+            if showStatus and iteration%round((2**len(present_findings))/8)==0:
+                print(iteration/(2**len(present_findings))*100,'%')
+            iteration += 1
+        return res
+
+    def PFindings_v3(self, present_findings, absent_findings, d_i=None, showStatus = False):
+        '''
+        The probability that a mixture of findings will be present or absent.
+        Absorbs negative findings first.
+        '''
+
+        local_PD = list(self.PD)
+
+
+        #Absorb evidence from the negative findings
+        for i in absent_findings:
+            for j in util.findingRelatedDis(self.Q,i):
+                local_PD[j] *= (1-self.Q[i,j])
+
+        res = 0
+        iteration = 0
+        for F in _powerset(present_findings):
+            sign = (-1) ** len(F)
+            out_prod = 1
+            for i in util.parentsOfFindings(self.Q,F+absent_findings):
+                inn_prod = 1
+                for f in F:
+                    inn_prod = inn_prod * (1 - self.Q[f, i])
+
+                if (i == d_i):
+                    out_prod = out_prod * inn_prod
+                else:
+                    out_prod = out_prod * (inn_prod * local_PD[i] + (self.oneMinusPD(i)))
+            res = res + sign * out_prod
+            if showStatus and iteration%round((2**len(present_findings))/8)==0:
+                print(iteration/(2**len(present_findings))*100,'%')
+            iteration += 1
+        return res
     
     def PFindings_not_di(self,present_findings, absent_findings, d_i = None):
         '''    
@@ -204,7 +222,7 @@ class QS:
                         inn_prod = inn_prod*(1-self.Q[f,i])
 
                 if(i==d_i):
-                    out_prod = out_prod # * inn_prod # This is the only changed compared to other method.
+                    out_prod = out_prod # * inn_prod # This is the only change compared to other method.
                 else:
                     out_prod = out_prod * ( inn_prod*self.PD[i]+(self.oneMinusPD(i)))
             res = res + sign*out_prod
@@ -213,10 +231,11 @@ class QS:
 
     def posterior_d(self,present_findings, absent_findings, disease):
         '''    
-        Implements equation 11 from paper: The posterior probability of disease given the findings
+        The posterior probability of disease given the findings
         '''
         num = self.PFindings(present_findings, absent_findings,disease)* self.PD[disease]
         den = self.PFindings(present_findings, absent_findings)
+        print(den)
         if num==0 or den ==0:
             return 0
         else:
@@ -277,53 +296,61 @@ class QS:
 
 
         return res
-    
 
-    
-    def mple_dis_post_fast_v2(self,diseases,present_findings, absent_findings):
+    def mple_dis_post_fast_v3(self, diseases, present_findings, absent_findings, return_finding_prob=False):
         '''
         Gives posterior over each disease in diseases given the set of symptomps. Implemented with a preprocessing step that caches
-        some probabilities beforehand. 
+        some probabilities beforehand.
+
+        This revision only iterates over relevant parents in the making of the dicitonary
+
         '''
         res = {}
-        
+        relevant_parents = util.parentsOfFindings(self.Q,present_findings+absent_findings)
         # Preprocessing step
         P_only_di = {}
         dict2 = {}
-        denn = 0 
+        denn = 0
         for F in _powerset_tuple(tuple(present_findings)):
             F_entry = 1
-            for i in range(self.N_disease()):
+            for i in relevant_parents:
                 entry_F_i = 1
-                for f in F+tuple(absent_findings):
-                    entry_F_i = entry_F_i * (1-self.Q[f,i])
-                P_only_di[F,i] = entry_F_i
-                #Extra preprocessing step: For each element in the powerset, calculate the associated product. This will be saved in a dict with an entry for each element.
-                F_entry = F_entry * (entry_F_i*self.PD[i] + (1-self.PD[i]))
+                for f in F + tuple(absent_findings):
+                    entry_F_i = entry_F_i * (1 - self.Q[f, i])
+                P_only_di[F, i] = entry_F_i
+                # Extra preprocessing step: For each element in the powerset, calculate the associated product. This will be saved in a dict with an entry for each element.
+                F_entry = F_entry * (entry_F_i * self.PD[i] + (1 - self.PD[i]))
             # Calculate the denominator here. This is the sum (with correct sign) of the entries in dict2
-            denn = denn + (-1)**len(F)*F_entry
+            denn = denn + (-1) ** len(F) * F_entry
             dict2[F] = F_entry
 
         # Calculate denominator(joint probability)
-
-
-        #Check if denominator is 0
-        if denn==0:
+        # Check if denominator is 0
+        if denn == 0:
             print('Probability of findings is 0. Division by zero.')
             for i in diseases:
                 res[i] = 0
+
+
         else:
             # Calculate posterior for each query disease
             for i in diseases:
-                res_sum = 0
-                for F in _powerset_tuple(tuple(present_findings)):
-                    sign = (-1)**len(F)
-                    # Major contribution to speedup: for each entry in dict2 divide out the factor that is superfluous and multiply with the correct factor.
-                    e = (dict2[F]/(P_only_di[F,i]*self.PD[i] + (1-self.PD[i])))*P_only_di[F,i]
-                    res_sum = res_sum + sign*e
-                res[i] = res_sum*self.PD[i]/denn
-                
-        return res
+                if i in relevant_parents:
+                    res_sum = 0
+                    for F in _powerset_tuple(tuple(present_findings)):
+                        sign = (-1) ** len(F)
+                        P_only_di[F, i]
+                        # for each entry in dict2 divide out the factor that is superfluous and multiply with the correct factor.
+                        e = (dict2[F] / (P_only_di[F, i] * self.PD[i] + (1 - self.PD[i]))) * P_only_di[F, i]
+                        res_sum = res_sum + sign * e
+                    res[i] = res_sum * self.PD[i] / denn
+                else:
+                    res[i] = self.PD[i]
+
+        if return_finding_prob == False:
+            return res
+        else:
+            return res, denn
     
     
     
@@ -364,7 +391,7 @@ class QS:
         return P_only_di, list(powerset_generator)
     
     def extend_ipdic_nfinding(self, dic, negative_finding):
-        '''Function to updating the inner product dictionary with the information from a single negative finding'''
+        '''Function for updating the inner product dictionary with the information from a single negative finding'''
         for (a,b),c in dic.items():
             dic[a,b] = c*(1-self.Q[negative_finding,b])
         return dic
