@@ -50,7 +50,7 @@ def __powerset(s):
             yield set
      
     
-def findingRelatedDis(Q, finding):
+def get_diseases_related_to_finding(Q, finding):
     '''
     Given a finding return indexes of all connected diseases (parents of the finding)
     '''
@@ -58,7 +58,7 @@ def findingRelatedDis(Q, finding):
     res = np.array([e[0] for e in res])
     return res
 
-def diseaseRelatedFindings(Q, disease):
+def get_findings_related_to_disease(Q, disease):
     '''
     Given a disease return indexes of all connected findings (children of the disease)
     '''
@@ -78,17 +78,17 @@ def nonZeroFindings(Q):
     return res
 
 
-def parentsOfFindings(Q, findings):
+def parents_of_findings(Q, findings):
     if type(findings)==tuple:
         findings = list(findings)
     assert type(findings) == list
     '''Returns the set of parents to all of the findings'''
     res = np.array([])
     for finding in findings:
-        res= np.union1d(findingRelatedDis(Q, finding),res,)
+        res= np.union1d(get_diseases_related_to_finding(Q, finding), res, )
     return list(res.astype(np.int))
 
-def rowNormalize2DArray(A):
+def rownormalize_2D_array(A):
     res = np.array(A)
     A_rowsums = A.sum(1)
     res = res / A_rowsums[:, np.newaxis]

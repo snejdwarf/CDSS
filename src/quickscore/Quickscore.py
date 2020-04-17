@@ -157,7 +157,7 @@ class Quickscore:
         for F in _powerset(present_findings):
             sign = (-1) ** len(F)
             out_prod = 1
-            for i in util.parentsOfFindings(self.Q,F+absent_findings):
+            for i in util.parents_of_findings(self.Q, F + absent_findings):
                 inn_prod = 1
                 for f in F + absent_findings:
                     inn_prod = inn_prod * (1 - self.Q[f, i])
@@ -183,7 +183,7 @@ class Quickscore:
 
         #Absorb evidence from the negative findings
         for i in absent_findings:
-            for j in util.findingRelatedDis(self.Q,i):
+            for j in util.get_diseases_related_to_finding(self.Q, i):
                 local_PD[j] *= (1-self.Q[i,j])
 
         res = 0
@@ -191,7 +191,7 @@ class Quickscore:
         for F in _powerset(present_findings):
             sign = (-1) ** len(F)
             out_prod = 1
-            for i in util.parentsOfFindings(self.Q,F+absent_findings):
+            for i in util.parents_of_findings(self.Q, F + absent_findings):
                 inn_prod = 1
                 for f in F:
                     inn_prod = inn_prod * (1 - self.Q[f, i])
@@ -306,7 +306,7 @@ class Quickscore:
 
         '''
         res = {}
-        relevant_parents = util.parentsOfFindings(self.Q,present_findings+absent_findings)
+        relevant_parents = util.parents_of_findings(self.Q, present_findings + absent_findings)
         # Preprocessing step
         P_only_di = {}
         dict2 = {}

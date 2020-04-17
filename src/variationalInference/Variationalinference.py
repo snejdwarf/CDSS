@@ -69,7 +69,7 @@ class VI:
         ns = qs.N_findings()
         local_xi = [2 for i in range(len(trans_findings))] if xi is None else xi
         tic = time.time()
-        all_posts,finding_prob = qs.mple_dis_post_fast_v3(util.parentsOfFindings(qs.Q,trans_findings), exact_findings, [],return_finding_prob=True)
+        all_posts,finding_prob = qs.mple_dis_post_fast_v3(util.parents_of_findings(qs.Q, trans_findings), exact_findings, [], return_finding_prob=True)
         tac = time.time()
         func = self.logP_fplus_eps
         obj = optimize.minimize(func, local_xi, args=(trans_findings, exact_findings, qs, all_posts),
@@ -139,7 +139,7 @@ class VI:
         # Calculate second term: log to the expectation value
         term2 = 1
         if all_posts_arg == None:
-            relevantFindings = util.parentsOfFindings(qs.Q,trans_findings)
+            relevantFindings = util.parents_of_findings(qs.Q, trans_findings)
             all_posts = qs.mple_dis_post_fast_v3(relevantFindings,exact_findings,[])
         else:
             all_posts = all_posts_arg
@@ -147,7 +147,7 @@ class VI:
 
         for xi_index,i in enumerate(trans_findings):
 
-            for j in util.findingRelatedDis(qs.Q,i):
+            for j in util.get_diseases_related_to_finding(qs.Q, i):
 
                 post_dj = all_posts[j]
 
@@ -179,7 +179,7 @@ class VI:
 
         for xi_index,i in enumerate(trans_findings):
 
-            for j in util.findingRelatedDis(qs.Q,i):
+            for j in util.get_diseases_related_to_finding(qs.Q, i):
 
                 post_dj = all_posts[j]
 
@@ -262,7 +262,7 @@ class VI:
         
         # Absorb transformed findings
         for i in transformed_findings:
-            d_parents_i = util.findingRelatedDis(Q,i)
+            d_parents_i = util.get_diseases_related_to_finding(Q, i)
             for j in d_parents_i:
                 qlb_ij = q_params[i,j]
                 g_ij = self.g(i,j,qlb_ij,Q)
@@ -279,7 +279,7 @@ class VI:
         q_res = np.array(q_params_old)
 
         for i in transformed_findings:
-            for j in util.findingRelatedDis(Q,i):
+            for j in util.get_diseases_related_to_finding(Q, i):
                 #Calculate expectation
                     #exponent
                 exp=0
@@ -326,7 +326,7 @@ class VI:
             #    for j in util.findingRelatedDis(Q,i):
             #        q_params_old[i,j] = 1
 
-        relevant_diseases = util.parentsOfFindings(Q,transformed_findings)
+        relevant_diseases = util.parents_of_findings(Q, transformed_findings)
         qs = Quickscore.Quickscore(Q, PD)
         relevant_posteriors = qs.mple_dis_post_fast_v3(relevant_diseases, exact_positive,[])
 
@@ -335,11 +335,11 @@ class VI:
         for i in range(maxIter):
             q_updated=self.updateQlbParameters_oneIteration(Q,PD,transformed_findings,exact_positive,exact_negative,q_updated, relevant_posteriors)
             #Normalize parameters
-            q_updated=util.rowNormalize2DArray(q_updated)
+            q_updated=util.rownormalize_2D_array(q_updated)
             #Variable to keep track of convergence
             q_sum=0
             for ii in transformed_findings:
-                for j in util.findingRelatedDis(Q,ii):
+                for j in util.get_diseases_related_to_finding(Q, ii):
                     q_sum += q_updated[ii,j]
 
             #print("q_sum diff: ", abs(q_sumold-q_sum))
@@ -403,7 +403,7 @@ class VI:
         PD_copy = np.array(PD)
         qs = Quickscore.Quickscore(Q, PD_copy, onlyupdatepd=True)
         for i in negative_trans:
-            for j in util.findingRelatedDis(Q,i):
+            for j in util.get_diseases_related_to_finding(Q, i):
                 qs.PD[j] *= (1-Q[i,j])
                 pass;
         return qs.probability_of_findings([], negative_rest)
