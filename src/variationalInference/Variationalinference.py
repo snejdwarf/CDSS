@@ -37,7 +37,7 @@ class VI:
 
     def joint_probability_upper_bound(self, Q, PD, positive_findings, n_trans_findings, use_delta_ordering=False):
 
-        qs = Quickscore.QS(Q,PD)
+        qs = Quickscore.Quickscore(Q, PD)
 
         ordered_findings = []
         if use_delta_ordering:
@@ -188,7 +188,7 @@ class VI:
         term2 = np.log(term2)
 
         # Calculate constant C: the likelihood of the exactly treated findings
-        qs_res=qs.PFindings(exact_findings,[])
+        qs_res=qs.probability_of_findings(exact_findings, [])
         C = np.log(qs_res)
 
         sumterms = term1 + term2 + C
@@ -231,7 +231,7 @@ class VI:
         Function that calculates the lower bound on the joint probability of the findings for the given q-parameters. Splits result into two factors: one for the exact probability and one for the transformed
         '''
 
-        qs = Quickscore.QS(Q,PD,onlyupdatepd=True)
+        qs = Quickscore.Quickscore(Q, PD, onlyupdatepd=True)
         relevant_posteriors,finding_prob = qs.mple_dis_post_fast_v3(list(range(len(PD))),exact_positive,[],return_finding_prob=True)
         #print("finding_prob", finding_prob)
 
@@ -270,7 +270,7 @@ class VI:
                 den = nom + (1-PD_copy[j])
                 PD_copy[j] = nom/den
                 
-        qs_local = Quickscore.QS(Q,PD_copy)
+        qs_local = Quickscore.Quickscore(Q, PD_copy)
         return qs_local.mple_dis_post_fast_v3([i for i in range(len(PD))],exact_positive,exact_negative)
 
 
@@ -327,7 +327,7 @@ class VI:
             #        q_params_old[i,j] = 1
 
         relevant_diseases = util.parentsOfFindings(Q,transformed_findings)
-        qs = Quickscore.QS(Q,PD)
+        qs = Quickscore.Quickscore(Q, PD)
         relevant_posteriors = qs.mple_dis_post_fast_v3(relevant_diseases, exact_positive,[])
 
         q_sumold = 1e-10
@@ -357,7 +357,7 @@ class VI:
         if use_delta_ordering_lbb and use_delta_ordering_ubb:
             raise Exception("Can only use one type of delta ordering")
 
-        qs = Quickscore.QS(Q,PD,onlyupdatepd=True)
+        qs = Quickscore.Quickscore(Q, PD, onlyupdatepd=True)
 
         # in case of no sorting
         best_findings_to_keep = positive_findings
@@ -401,16 +401,16 @@ class VI:
     def absorb_negative_findings(self, Q, PD, negative_trans, negative_rest):
         
         PD_copy = np.array(PD)
-        qs = Quickscore.QS(Q,PD_copy, onlyupdatepd=True)
+        qs = Quickscore.Quickscore(Q, PD_copy, onlyupdatepd=True)
         for i in negative_trans:
             for j in util.findingRelatedDis(Q,i):
                 qs.PD[j] *= (1-Q[i,j])
                 pass;
-        return qs.PFindings([],negative_rest)
+        return qs.probability_of_findings([], negative_rest)
 
     def PFindings_factorize(self, Q, PD, positive_findings, negative_findings):
         relevant_diseases = list(range(len(PD)))
-        qs = Quickscore.QS(Q,PD)
+        qs = Quickscore.Quickscore(Q, PD)
         relevant_posts,finding_prob = qs.mple_dis_post_fast_v3(relevant_diseases,positive_findings,[],return_finding_prob=True)
 
         factor = 1
@@ -422,7 +422,7 @@ class VI:
             factor *= iter_factor*relevant_posts[j] + (1-relevant_posts[j])
 
 
-        qs_pos_part = qs.PFindings(positive_findings,[])
+        qs_pos_part = qs.probability_of_findings(positive_findings, [])
 
 
         return finding_prob*factor

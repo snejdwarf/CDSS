@@ -30,7 +30,7 @@ def _powerset_tuple(s):
             yield (s[0],) + set
             yield set
 
-class QS:
+class Quickscore:
 
     def set_mpm_precision(self, precision):
         mpm.mp.dps = precision
@@ -125,7 +125,7 @@ class QS:
             res = res + sign*out_prod
         return res
 
-    def PFindings(self,present_findings, absent_findings, d_i = None):
+    def probability_of_findings(self, present_findings, absent_findings, d_i = None):
         '''    
         The probability that a mixture of findings will be present or absent.
         
@@ -147,7 +147,7 @@ class QS:
             res = res + sign*out_prod
         return res
 
-    def PFindings_v2(self, present_findings, absent_findings, d_i=None, showStatus = False):
+    def probability_of_findings_opt2(self, present_findings, absent_findings, d_i=None, showStatus = False):
         '''
         Implements equation 11 from paper: The probability that a mixture of findings will be present or absent.
         Only iterates over relevant disease parents.
@@ -172,7 +172,7 @@ class QS:
             iteration += 1
         return res
 
-    def PFindings_v3(self, present_findings, absent_findings, d_i=None, showStatus = False):
+    def probability_of_findings_opt3(self, present_findings, absent_findings, d_i=None, showStatus = False):
         '''
         The probability that a mixture of findings will be present or absent.
         Absorbs negative findings first.
@@ -206,7 +206,7 @@ class QS:
             iteration += 1
         return res
     
-    def PFindings_not_di(self,present_findings, absent_findings, d_i = None):
+    def probability_of_findings_given_not_di(self, present_findings, absent_findings, d_i = None):
         '''    
         Implements equation 11 from paper: The probability that a mixture of findings will be present or absent.
         
@@ -233,8 +233,8 @@ class QS:
         '''    
         The posterior probability of disease given the findings
         '''
-        num = self.PFindings(present_findings, absent_findings,disease)* self.PD[disease]
-        den = self.PFindings(present_findings, absent_findings)
+        num = self.probability_of_findings(present_findings, absent_findings, disease) * self.PD[disease]
+        den = self.probability_of_findings(present_findings, absent_findings)
         print(den)
         if num==0 or den ==0:
             return 0
@@ -271,7 +271,7 @@ class QS:
 
         # Calculate denominator(joint probability)
 
-        den = self.PFindings(list(present_findings),list(absent_findings))
+        den = self.probability_of_findings(list(present_findings), list(absent_findings))
         
         #Check if denominator is 0
         if den==0:
@@ -389,14 +389,9 @@ class QS:
                 P_only_di[F,i] = entry_F_i
         powerset_generator = _powerset(positive_findings)
         return P_only_di, list(powerset_generator)
+
     
-    def extend_ipdic_nfinding(self, dic, negative_finding):
-        '''Function for updating the inner product dictionary with the information from a single negative finding'''
-        for (a,b),c in dic.items():
-            dic[a,b] = c*(1-self.Q[negative_finding,b])
-        return dic
-    
-    def extend_ipdic_nfinding_ver2(self, dic, powerset_old, new_negative_finding, old_result):
+    def extend_ipdic_nfinding(self, dic, powerset_old, new_negative_finding, old_result):
         '''Function to updating the inner product dictionary with the information from a single negative finding'''
         res = 0
         for F in powerset_old:
@@ -430,7 +425,7 @@ class QS:
         new_result = old_result + added_res
         return dic, new_powerset, new_result
     
-    def PFindings_dbased(self,positive_findings,negative_findings, dic, powerset):
+    def probability_of_findings_dict_based(self, positive_findings, negative_findings, dic, powerset):
         '''Function to calculate joint probability of the findings given that the inner product dictionary dic is already calculated'''
         res = 0
         #for F in _powerset_tuple(tuple(positive_findings)):
@@ -463,7 +458,7 @@ class QS:
                 
         if result is None:
             pass
-            result = self.PFindings_dbased([finding],[],dic, powerset) if state == 'positive' else self.PFindings_dbased([],[finding],dic, powerset)
+            result = self.probability_of_findings_dict_based([finding], [], dic, powerset) if state == 'positive' else self.probability_of_findings_dict_based([], [finding], dic, powerset)
         #_________________________________________________
         
         outer = self
@@ -481,7 +476,7 @@ class QS:
                     new_positive_findings = positive_findings + [_finding]
                     return outer.add_finding(_,_,dic = new_dic, result = new_result,powerset = new_powerset, positive_findings = new_positive_findings, negative_findings = negative_findings)
                 if state == 'negative':
-                    new_dic,new_result = outer.extend_ipdic_nfinding_ver2(dic, powerset, _finding, result)
+                    new_dic,new_result = outer.extend_ipdic_nfinding(dic, powerset, _finding, result)
                     new_negative_findings = negative_findings + [_finding]
                     return outer.add_finding(_,_,dic = new_dic, result = new_result, powerset = powerset, positive_findings = positive_findings, negative_findings = new_negative_findings)
                 else:

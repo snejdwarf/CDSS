@@ -9,7 +9,7 @@ random.seed(42)
 #Create quickscore object and model containing nd diseases and nf symptoms
 nd = 400
 nf = 800
-qs = Quickscore.QS()
+qs = Quickscore.Quickscore()
 
 qs.generateRandomTables(nd,nf)
 Q = qs.Q
@@ -21,7 +21,7 @@ positive_findings = [34,56,78,79,82,85,87,90,91,95,100,105,108]
 #Calculate the exact probability of having the symptoms
 tic = time.time()
 print('Calculating exact probability...')
-res=qs.PFindings(positive_findings,[]);
+res=qs.probability_of_findings(positive_findings, []);
 tac = time.time()
 print("Exact probability",res, "Time: ",tac-tic);
 
